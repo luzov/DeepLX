@@ -26,6 +26,7 @@ deeplx pro2api：
 如果发现dl_session不可用，直接替换即可。
 
 Hoppscotch 调试，查看返回字段中 method 为 Pro 即为 Pro2api：
+
 [![Run in Hoppscotch](https://hopp.sh/badge.svg)](https://hopp.sh/r/aRC6qU5GNlHZ)
 
 ```json
