@@ -57,7 +57,7 @@ jobs:
           # list of Docker images to use as base name for tags
           images: |
             docker.io/${{ env.DOCKER_IMAGE_NAME }}
-            # ghcr.io/${{ env.GHCR_IMAGE_NAME }}
+          # ghcr.io/${{ env.GHCR_IMAGE_NAME }}
           # generate Docker tags based on the following events/attributes
           tags: |
             type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/') }}
