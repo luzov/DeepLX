@@ -2,20 +2,18 @@
 
 基于 [OwO-Network/DeepLX: Powerful Free DeepL API, No Token Required (github.com)](https://github.com/OwO-Network/DeepLX)修改。
 
-## 使用Docker部署
+## 使用Docker一键部署
 
-1. 安装Docker和Docker Compose
+1. 安装Docker
 
-2. 下载docker-compose.yml文件:
+2. 运行以下命令启动服务:
    ```
-   wget https://raw.githubusercontent.com/YuCN0010/DeepLX/main/compose.yaml
-   ```
-
-3. 运行以下命令启动服务:
-   ```
-   docker-compose up -d
+   docker run -d --name deeplx -p 11888:11888 yucn/deeplx:latest
    ```
 
-4. 服务将在 http://localhost:11888 上运行
+3. 服务将在 http://localhost:11888 上运行
 
-如果需要设置TOKEN或DL_SESSION,请取消注释docker-compose.yml文件中的相应环境变量并设置值。
+如果需要设置TOKEN或DL_SESSION，可以在运行命令时添加环境变量，例如：
+   ```
+   docker run -d --name deeplx -p 11888:11888 -e TOKEN=your_token -e DL_SESSION=your_session yucn/deeplx:latest
+   ```

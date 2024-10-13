@@ -8,7 +8,7 @@ on:
       - 'v*'
 
 env:
-  DOCKER_IMAGE_NAME: missuo/deeplx
+  DOCKER_IMAGE_NAME: yucn/deeplx
   GHCR_IMAGE_NAME: ${{ github.repository }}
   DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
   DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
