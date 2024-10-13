@@ -9,11 +9,11 @@ on:
 
 env:
   DOCKER_IMAGE_NAME: yucn/deeplx
-  GHCR_IMAGE_NAME: ${{ github.repository }}
+  # GHCR_IMAGE_NAME: ${{ github.repository }}
   DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
   DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
-  GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-  GHCR_USERNAME: ${{ github.repository_owner }}
+  # GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  # GHCR_USERNAME: ${{ github.repository_owner }}
 
 jobs:
   docker_build:
@@ -43,12 +43,12 @@ jobs:
           username: ${{ env.DOCKER_USERNAME }}
           password: ${{ env.DOCKER_PASSWORD }}
 
-      - name: Login to GHCR
-        uses: docker/login-action@v2
-        with:
-          registry: ghcr.io
-          username: ${{ env.GHCR_USERNAME }}
-          password: ${{ env.GHCR_TOKEN }}
+      # - name: Login to GHCR
+      #   uses: docker/login-action@v2
+      #   with:
+      #     registry: ghcr.io
+      #     username: ${{ env.GHCR_USERNAME }}
+      #     password: ${{ env.GHCR_TOKEN }}
 
       - name: Docker meta
         id: meta
@@ -57,7 +57,7 @@ jobs:
           # list of Docker images to use as base name for tags
           images: |
             docker.io/${{ env.DOCKER_IMAGE_NAME }}
-            ghcr.io/${{ env.GHCR_IMAGE_NAME }}
+            # ghcr.io/${{ env.GHCR_IMAGE_NAME }}
           # generate Docker tags based on the following events/attributes
           tags: |
             type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/') }}
