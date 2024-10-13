@@ -5,7 +5,7 @@ services:
     image: ghcr.io/owo-network/deeplx:latest
     restart: always
     ports:
-      - "1188:1188"
+      - "11888:11888"
     # environment:
       # - TOKEN=helloworld
       # - DL_SESSION=xxxxxx
