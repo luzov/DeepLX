@@ -29,7 +29,7 @@ type Config struct {
 func initConfig() *Config {
 	cfg := &Config{
 		IP:   "0.0.0.0",
-		Port: 1188,
+		Port: 11888, // 修改默认端口，方便在win11上调试
 	}
 
 	// IP flag
