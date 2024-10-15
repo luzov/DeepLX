@@ -20,6 +20,11 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Set timezone to Shanghai
+        run: |
+          echo "TZ='Asia/Shanghai'" >> $GITHUB_ENV
+          date
+          
       - name: Checkout
         uses: actions/checkout@v3
         with:
