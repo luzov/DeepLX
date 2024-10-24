@@ -168,6 +168,8 @@ func main() {
 
 		dlSession := cfg.DlSession
 
+		fmt.Printf("ENV DL_SESSION: %s\n", cfg.DlSession)
+
 		if tagHandling != "" && tagHandling != "html" && tagHandling != "xml" {
 			c.JSON(http.StatusBadRequest, gin.H{
 				"code":    http.StatusBadRequest,
