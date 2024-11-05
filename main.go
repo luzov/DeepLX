@@ -176,9 +176,72 @@ func main() {
 			return
 		}
 
-		cookie := c.GetHeader("Cookie")
-		if cookie != "" {
-			dlSession = strings.Replace(cookie, "dl_session=", "", -1)
+		if cookie := c.GetHeader("Cookie"); cookie != "" {
+			for _, part := range strings.Split(cookie, ";") {
+				if strings.HasPrefix(part, "dl_session=") {
+					dlSession = strings.TrimPrefix(part, "dl_session=")
+					break
+				}
+			}
+		}
+
+		if dlSession == "" {
+			c.JSON(http.StatusUnauthorized, gin.H{
+				"code":    http.StatusUnauthorized,
+				"message": "No dl_session Found",
+			})
+			return
+		} else if strings.Contains(dlSession, ".") {
+			c.JSON(http.StatusUnauthorized, gin.H{
+				"code":    http.StatusUnauthorized,
+				"message": "Your account is not a Pro account. Please upgrade your account or switch to a different account.",
+			})
+			return
+		}
+
+		result, err := translate.TranslateByDeepLX(sourceLang, targetLang, translateText, tagHandling, proxyURL, dlSession)
+		if err != nil {
+			log.Fatalf("Translation failed: %s", err)
+		}
+
+		if result.Code == http.StatusOK {
+			c.JSON(http.StatusOK, gin.H{
+				"code":         http.StatusOK,
+				"id":           result.ID,
+				"data":         result.Data,
+				"alternatives": result.Alternatives,
+				"source_lang":  result.SourceLang,
+				"target_lang":  result.TargetLang,
+				"method":       result.Method,
+			})
+		} else {
+			c.JSON(result.Code, gin.H{
+				"code":    result.Code,
+				"message": result.Message,
+			})
+
+		}
+	})
+
+	// Pro API endpoint, Pro Account required
+	r.POST("/:dl_session/v1/translate", authMiddleware(cfg), func(c *gin.Context) {
+		req := PayloadFree{}
+		c.BindJSON(&req)
+
+		sourceLang := req.SourceLang
+		targetLang := req.TargetLang
+		translateText := req.TransText
+		tagHandling := req.TagHandling
+		proxyURL := cfg.Proxy
+
+		dlSession := c.Param("dl_session")
+
+		if tagHandling != "" && tagHandling != "html" && tagHandling != "xml" {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"code":    http.StatusBadRequest,
+				"message": "Invalid tag_handling value. Allowed values are 'html' and 'xml'.",
+			})
+			return
 		}
 
 		if dlSession == "" {
