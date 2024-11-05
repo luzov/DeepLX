@@ -1,8 +1,8 @@
 /*
  * @Author: Vincent Young
  * @Date: 2024-09-16 11:59:24
- * @LastEditors: Vincent Young
- * @LastEditTime: 2024-09-16 12:09:37
+ * @LastEditors: Vincent Yang
+ * @LastEditTime: 2024-11-01 23:19:11
  * @FilePath: /DeepLX/translate/translate.go
  * @Telegram: https://t.me/missuo
  * @GitHub: https://github.com/missuo
@@ -14,354 +14,273 @@ package translate
 
 import (
 	"bytes"
-	"encoding/json"
+	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"net/url"
 	"strings"
 
-	"github.com/abadojack/whatlanggo"
 	"github.com/andybalholm/brotli"
 	"github.com/tidwall/gjson"
 )
 
-func initDeepLXData(sourceLang string, targetLang string) *PostData {
-	hasRegionalVariant := false
-	targetLangParts := strings.Split(targetLang, "-")
+const baseURL = "https://www2.deepl.com/jsonrpc"
 
-	// targetLang can be "en", "pt", "pt-PT", "pt-BR"
-	// targetLangCode is the first part of the targetLang, e.g. "pt" in "pt-PT"
-	targetLangCode := targetLangParts[0]
+// makeRequest makes an HTTP request to DeepL API
+func makeRequest(postData *PostData, urlMethod string, proxyURL string, dlSession string) (gjson.Result, error) {
+	urlFull := fmt.Sprintf("%s?client=chrome-extension,1.28.0&method=%s", baseURL, urlMethod)
+
+	postStr := formatPostString(postData)
+	req, err := http.NewRequest("POST", urlFull, bytes.NewReader([]byte(postStr)))
+	if err != nil {
+		return gjson.Result{}, err
+	}
+
+	if dlSession != "" {
+		req.Header = http.Header{
+			"Accept":          []string{"*/*"},
+			"Accept-Language": []string{"en-US,en;q=0.9,zh-CN;q=0.8,zh-TW;q=0.7,zh-HK;q=0.6,zh;q=0.5"},
+			"Authorization":   []string{"None"},
+			"Cache-Control":   []string{"no-cache"},
+			"Content-Type":    []string{"application/json"},
+			"DNT":             []string{"1"},
+			"Origin":          []string{"chrome-extension://cofdbpoegempjloogbagkncekinflcnj"},
+			"Pragma":          []string{"no-cache"},
+			"Priority":        []string{"u=1, i"},
+			"Referer":         []string{"https://www.deepl.com/"},
+			"Sec-Fetch-Dest":  []string{"empty"},
+			"Sec-Fetch-Mode":  []string{"cors"},
+			"Sec-Fetch-Site":  []string{"none"},
+			"Sec-GPC":         []string{"1"},
+			"User-Agent":      []string{"DeepLBrowserExtension/1.28.0 Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36"},
+			"Cookie":          []string{"dl_session=" + dlSession},
+		}
+	} else {
+		req.Header = http.Header{
+			"Accept":          []string{"*/*"},
+			"Accept-Language": []string{"en-US,en;q=0.9,zh-CN;q=0.8,zh-TW;q=0.7,zh-HK;q=0.6,zh;q=0.5"},
+			"Authorization":   []string{"None"},
+			"Cache-Control":   []string{"no-cache"},
+			"Content-Type":    []string{"application/json"},
+			"DNT":             []string{"1"},
+			"Origin":          []string{"chrome-extension://cofdbpoegempjloogbagkncekinflcnj"},
+			"Pragma":          []string{"no-cache"},
+			"Priority":        []string{"u=1, i"},
+			"Referer":         []string{"https://www.deepl.com/"},
+			"Sec-Fetch-Dest":  []string{"empty"},
+			"Sec-Fetch-Mode":  []string{"cors"},
+			"Sec-Fetch-Site":  []string{"none"},
+			"Sec-GPC":         []string{"1"},
+			"User-Agent":      []string{"DeepLBrowserExtension/1.28.0 Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36"},
+		}
+	}
+
+	// Setup client with proxy if provided
+	var client *http.Client
+	if proxyURL != "" {
+		proxy, err := url.Parse(proxyURL)
+		if err != nil {
+			return gjson.Result{}, err
+		}
+		client = &http.Client{Transport: &http.Transport{Proxy: http.ProxyURL(proxy)}}
+	} else {
+		client = &http.Client{}
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return gjson.Result{}, err
+	}
+	defer resp.Body.Close()
+
+	var bodyReader io.Reader
+	if resp.Header.Get("Content-Encoding") == "br" {
+		bodyReader = brotli.NewReader(resp.Body)
+	} else {
+		bodyReader = resp.Body
+	}
+
+	body, err := io.ReadAll(bodyReader)
+	if err != nil {
+		return gjson.Result{}, err
+	}
+	return gjson.ParseBytes(body), nil
+}
+
+// splitText splits the input text for translation
+func splitText(text string, tagHandling bool, proxyURL string, dlSession string) (gjson.Result, error) {
+	postData := &PostData{
+		Jsonrpc: "2.0",
+		Method:  "LMT_split_text",
+		ID:      getRandomNumber(),
+		Params: Params{
+			CommonJobParams: CommonJobParams{
+				Mode: "translate",
+			},
+			Lang: Lang{
+				LangUserSelected: "auto",
+			},
+			Texts:    []string{text},
+			TextType: map[bool]string{true: "richtext", false: "plaintext"}[tagHandling || isRichText(text)],
+		},
+	}
+
+	return makeRequest(postData, "LMT_split_text", proxyURL, dlSession)
+}
+
+// TranslateByDeepLX performs translation using DeepL API
+func TranslateByDeepLX(sourceLang, targetLang, text string, tagHandling string, proxyURL string, dlSession string) (DeepLXTranslationResult, error) {
+	if text == "" {
+		return DeepLXTranslationResult{
+			Code:    http.StatusNotFound,
+			Message: "No text to translate",
+		}, nil
+	}
+
+	// Split text first
+	splitResult, err := splitText(text, tagHandling == "html" || tagHandling == "xml", proxyURL, dlSession)
+	if err != nil {
+		return DeepLXTranslationResult{
+			Code:    http.StatusServiceUnavailable,
+			Message: err.Error(),
+		}, nil
+	}
+
+	// Get detected language if source language is auto
+	if sourceLang == "auto" || sourceLang == "" {
+		sourceLang = strings.ToLower(splitResult.Get("result.lang.detected").String())
+	}
+
+	// Prepare jobs from split result
+	var jobs []Job
+	chunks := splitResult.Get("result.texts.0.chunks").Array()
+	for idx, chunk := range chunks {
+		sentence := chunk.Get("sentences.0")
+
+		// Handle context
+		contextBefore := []string{}
+		contextAfter := []string{}
+		if idx > 0 {
+			contextBefore = []string{chunks[idx-1].Get("sentences.0.text").String()}
+		}
+		if idx < len(chunks)-1 {
+			contextAfter = []string{chunks[idx+1].Get("sentences.0.text").String()}
+		}
+
+		jobs = append(jobs, Job{
+			Kind:               "default",
+			PreferredNumBeams:  4,
+			RawEnContextBefore: contextBefore,
+			RawEnContextAfter:  contextAfter,
+			Sentences: []Sentence{{
+				Prefix: sentence.Get("prefix").String(),
+				Text:   sentence.Get("text").String(),
+				ID:     idx + 1,
+			}},
+		})
+	}
+
+	hasRegionalVariant := false
+	targetLangCode := targetLang
+	targetLangParts := strings.Split(targetLang, "-")
 	if len(targetLangParts) > 1 {
+		targetLangCode = targetLangParts[0]
 		hasRegionalVariant = true
 	}
 
-	commonJobParams := CommonJobParams{
-		WasSpoken:    false,
-		TranscribeAS: "",
-	}
-	if hasRegionalVariant {
-		commonJobParams.RegionalVariant = targetLang
-	}
+	// Prepare translation request
+	id := getRandomNumber()
 
-	return &PostData{
+	postData := &PostData{
 		Jsonrpc: "2.0",
-		Method:  "LMT_handle_texts",
+		Method:  "LMT_handle_jobs",
+		ID:      id,
 		Params: Params{
-			Splitting: "newlines",
-			Lang: Lang{
-				SourceLangUserSelected: sourceLang,
-				TargetLang:             targetLangCode,
+			CommonJobParams: CommonJobParams{
+				Mode: "translate",
 			},
-			CommonJobParams: commonJobParams,
+			Lang: Lang{
+				SourceLangComputed: strings.ToUpper(sourceLang),
+				TargetLang:         strings.ToUpper(targetLangCode),
+			},
+			Jobs:      jobs,
+			Priority:  1,
+			Timestamp: getTimeStamp(getICount(text)),
 		},
 	}
-}
 
-func TranslateByDeepLX(sourceLang string, targetLang string, translateText string, tagHandling string, proxyURL string) (DeepLXTranslationResult, error) {
-	id := getRandomNumber()
-	if sourceLang == "" {
-		lang := whatlanggo.DetectLang(translateText)
-		deepLLang := strings.ToUpper(lang.Iso6391())
-		sourceLang = deepLLang
-	}
-	// If target language is not specified, set it to English
-	if targetLang == "" {
-		targetLang = "EN"
-	}
-	// Handling empty translation text
-	if translateText == "" {
-		return DeepLXTranslationResult{
-			Code:    http.StatusNotFound,
-			Message: "No text to translate",
-		}, nil
-	}
-
-	// Preparing the request data for the DeepL API
-	www2URL := "https://www2.deepl.com/jsonrpc"
-	id = id + 1
-	postData := initDeepLXData(sourceLang, targetLang)
-	text := Text{
-		Text:                translateText,
-		RequestAlternatives: 3,
-	}
-	postData.ID = id
-	postData.Params.Texts = append(postData.Params.Texts, text)
-	postData.Params.Timestamp = getTimeStamp(getICount(translateText))
-
-	if tagHandling == "html" || tagHandling == "xml" {
-		postData.Params.TagHandling = tagHandling
+	if hasRegionalVariant {
+		postData = &PostData{
+			Jsonrpc: "2.0",
+			Method:  "LMT_handle_jobs",
+			ID:      id,
+			Params: Params{
+				CommonJobParams: CommonJobParams{
+					Mode:            "translate",
+					RegionalVariant: map[bool]string{true: targetLang, false: ""}[hasRegionalVariant],
+				},
+				Lang: Lang{
+					SourceLangComputed: strings.ToUpper(sourceLang),
+					TargetLang:         strings.ToUpper(targetLangCode),
+				},
+				Jobs:      jobs,
+				Priority:  1,
+				Timestamp: getTimeStamp(getICount(text)),
+			},
+		}
 	}
 
-	// Marshalling the request data to JSON and making necessary string replacements
-	post_byte, _ := json.Marshal(postData)
-	postStr := string(post_byte)
-
-	// Adding spaces to the JSON string based on the ID to adhere to DeepL's request formatting rules
-	if (id+5)%29 == 0 || (id+3)%13 == 0 {
-		postStr = strings.Replace(postStr, "\"method\":\"", "\"method\" : \"", -1)
-	} else {
-		postStr = strings.Replace(postStr, "\"method\":\"", "\"method\": \"", -1)
-	}
-
-	// Creating a new HTTP POST request with the JSON data as the body
-	post_byte = []byte(postStr)
-	reader := bytes.NewReader(post_byte)
-	request, err := http.NewRequest("POST", www2URL, reader)
-
+	// Make translation request
+	result, err := makeRequest(postData, "LMT_handle_jobs", proxyURL, dlSession)
 	if err != nil {
-		log.Println(err)
 		return DeepLXTranslationResult{
 			Code:    http.StatusServiceUnavailable,
-			Message: "Post request failed",
+			Message: err.Error(),
 		}, nil
 	}
 
-	// Setting HTTP headers to mimic a request from the DeepL iOS App
-	request.Header.Set("Content-Type", "application/json")
-	request.Header.Set("Accept", "*/*")
-	request.Header.Set("x-app-os-name", "iOS")
-	request.Header.Set("x-app-os-version", "18.0.1")
-	request.Header.Set("Accept-Language", "en-US,en;q=0.9")
-	request.Header.Set("Accept-Encoding", "gzip, deflate, br")
-	request.Header.Set("x-app-device", "iPhone13,2")
-	request.Header.Set("User-Agent", "DeepL-iOS/2.9.1 iOS 18.0.1 (iPhone16,1)")
-	request.Header.Set("x-app-build", "510265")
-	request.Header.Set("x-app-version", "2.9.1")
-	request.Header.Set("Connection", "keep-alive")
-
-	// Making the HTTP request to the DeepL API
-	var client *http.Client
-	if proxyURL != "" {
-		proxy, err := url.Parse(proxyURL)
-		if err != nil {
-			return DeepLXTranslationResult{
-				Code:    http.StatusServiceUnavailable,
-				Message: "Unknown error",
-			}, nil
-		}
-		transport := &http.Transport{
-			Proxy: http.ProxyURL(proxy),
-		}
-		client = &http.Client{Transport: transport}
-	} else {
-		client = &http.Client{}
-	}
-
-	resp, err := client.Do(request)
-	if err != nil {
-		log.Println(err)
-		return DeepLXTranslationResult{
-			Code:    http.StatusServiceUnavailable,
-			Message: "DeepL API request failed",
-		}, nil
-	}
-	defer resp.Body.Close()
-
-	// Handling potential Brotli compressed response body
-	var bodyReader io.Reader
-	switch resp.Header.Get("Content-Encoding") {
-	case "br":
-		bodyReader = brotli.NewReader(resp.Body)
-	default:
-		bodyReader = resp.Body
-	}
-
-	// Reading the response body and parsing it with gjson
-	body, _ := io.ReadAll(bodyReader)
-	// body, _ := io.ReadAll(resp.Body)
-	res := gjson.ParseBytes(body)
-
-	// Handling various response statuses and potential errors
-	if res.Get("error.code").String() == "-32600" {
-		log.Println(res.Get("error").String())
-		return DeepLXTranslationResult{
-			Code:    http.StatusNotAcceptable,
-			Message: "Invalid target language",
-		}, nil
-	}
-	if resp.StatusCode == http.StatusTooManyRequests {
-		return DeepLXTranslationResult{
-			Code:    http.StatusTooManyRequests,
-			Message: "Too Many Requests",
-		}, nil
-	}
-
+	// Process translation results
 	var alternatives []string
-	res.Get("result.texts.0.alternatives").ForEach(func(key, value gjson.Result) bool {
-		alternatives = append(alternatives, value.Get("text").String())
-		return true
-	})
-	if res.Get("result.texts.0.text").String() == "" {
+	var translatedText string
+
+	translations := result.Get("result.translations").Array()
+	if len(translations) > 0 {
+		// Get alternatives
+		numBeams := len(translations[0].Get("beams").Array())
+		for i := 0; i < numBeams; i++ {
+			var altText string
+			for _, translation := range translations {
+				beams := translation.Get("beams").Array()
+				if i < len(beams) {
+					altText += beams[i].Get("sentences.0.text").String()
+				}
+			}
+			if altText != "" {
+				alternatives = append(alternatives, altText)
+			}
+		}
+
+		// Get main translation
+		for _, translation := range translations {
+			translatedText += translation.Get("beams.0.sentences.0.text").String() + " "
+		}
+		translatedText = strings.TrimSpace(translatedText)
+	}
+
+	if translatedText == "" {
 		return DeepLXTranslationResult{
 			Code:    http.StatusServiceUnavailable,
-			Message: "Translation failed, API returns an empty result.",
-		}, nil
-	} else {
-		return DeepLXTranslationResult{
-			Code:         http.StatusOK,
-			ID:           id,
-			Message:      "Success",
-			Data:         res.Get("result.texts.0.text").String(),
-			Alternatives: alternatives,
-			SourceLang:   sourceLang,
-			TargetLang:   targetLang,
-			Method:       "Free",
-		}, nil
-	}
-}
-
-func TranslateByDeepLXPro(sourceLang string, targetLang string, translateText string, tagHandling string, dlSession string, proxyURL string) (DeepLXTranslationResult, error) {
-	id := getRandomNumber()
-	if sourceLang == "" {
-		lang := whatlanggo.DetectLang(translateText)
-		deepLLang := strings.ToUpper(lang.Iso6391())
-		sourceLang = deepLLang
-	}
-	// If target language is not specified, set it to English
-	if targetLang == "" {
-		targetLang = "EN"
-	}
-	// Handling empty translation text
-	if translateText == "" {
-		return DeepLXTranslationResult{
-			Code:    http.StatusNotFound,
-			Message: "No text to translate",
+			Message: "Translation failed",
 		}, nil
 	}
 
-	// Preparing the request data for the DeepL API
-	proURL := "https://api.deepl.com/jsonrpc"
-	id = id + 1
-	postData := initDeepLXData(sourceLang, targetLang)
-	text := Text{
-		Text:                translateText,
-		RequestAlternatives: 3,
-	}
-	postData.ID = id
-	postData.Params.Texts = append(postData.Params.Texts, text)
-	postData.Params.Timestamp = getTimeStamp(getICount(translateText))
-
-	if tagHandling == "html" || tagHandling == "xml" {
-		postData.Params.TagHandling = tagHandling
-	}
-
-	// Marshalling the request data to JSON and making necessary string replacements
-	post_byte, _ := json.Marshal(postData)
-	postStr := string(post_byte)
-
-	// Adding spaces to the JSON string based on the ID to adhere to DeepL's request formatting rules
-	if (id+5)%29 == 0 || (id+3)%13 == 0 {
-		postStr = strings.Replace(postStr, "\"method\":\"", "\"method\" : \"", -1)
-	} else {
-		postStr = strings.Replace(postStr, "\"method\":\"", "\"method\": \"", -1)
-	}
-
-	// Creating a new HTTP POST request with the JSON data as the body
-	post_byte = []byte(postStr)
-	reader := bytes.NewReader(post_byte)
-	request, err := http.NewRequest("POST", proURL, reader)
-
-	if err != nil {
-		log.Println(err)
-		return DeepLXTranslationResult{
-			Code:    http.StatusServiceUnavailable,
-			Message: "Post request failed",
-		}, nil
-	}
-
-	request.Header.Set("Content-Type", "application/json")
-	request.Header.Set("Accept", "*/*")
-	request.Header.Set("Accept-Language", "en-US,en;q=0.9")
-	request.Header.Set("Accept-Encoding", "gzip, deflate, br")
-	request.Header.Set("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36")
-	request.Header.Set("Origin", "https://www.deepl.com")
-	request.Header.Set("Referer", "https://www.deepl.com")
-	request.Header.Set("Connection", "keep-alive")
-	request.Header.Set("Cookie", "dl_session="+dlSession)
-
-	// Making the HTTP request to the DeepL API
-	var client *http.Client
-	if proxyURL != "" {
-		proxy, err := url.Parse(proxyURL)
-		if err != nil {
-			return DeepLXTranslationResult{
-				Code:    http.StatusServiceUnavailable,
-				Message: "DeepL API request failed",
-			}, nil
-		}
-		transport := &http.Transport{
-			Proxy: http.ProxyURL(proxy),
-		}
-		client = &http.Client{Transport: transport}
-	} else {
-		client = &http.Client{}
-	}
-	resp, err := client.Do(request)
-	if err != nil {
-		log.Println(err)
-		return DeepLXTranslationResult{
-			Code:    http.StatusServiceUnavailable,
-			Message: "DeepL API request failed",
-		}, nil
-	}
-	defer resp.Body.Close()
-
-	// Handling potential Brotli compressed response body
-	var bodyReader io.Reader
-	switch resp.Header.Get("Content-Encoding") {
-	case "br":
-		bodyReader = brotli.NewReader(resp.Body)
-	default:
-		bodyReader = resp.Body
-	}
-
-	// Reading the response body and parsing it with gjson
-	body, _ := io.ReadAll(bodyReader)
-	// body, _ := io.ReadAll(resp.Body)
-	res := gjson.ParseBytes(body)
-
-	if res.Get("error.code").String() == "-32600" {
-		log.Println(res.Get("error").String())
-		return DeepLXTranslationResult{
-			Code:    http.StatusNotAcceptable,
-			Message: "Invalid target language",
-		}, nil
-	}
-
-	if resp.StatusCode == http.StatusTooManyRequests {
-		return DeepLXTranslationResult{
-			Code:    http.StatusTooManyRequests,
-			Message: "Too Many Requests",
-		}, nil
-	} else if resp.StatusCode == http.StatusUnauthorized {
-		return DeepLXTranslationResult{
-			Code:    http.StatusUnauthorized,
-			Message: "dlsession is invalid",
-		}, nil
-	} else {
-		var alternatives []string
-		res.Get("result.texts.0.alternatives").ForEach(func(key, value gjson.Result) bool {
-			alternatives = append(alternatives, value.Get("text").String())
-			return true
-		})
-		if res.Get("result.texts.0.text").String() == "" {
-			return DeepLXTranslationResult{
-				Code:    http.StatusServiceUnavailable,
-				Message: "Translation failed, API returns an empty result.",
-			}, nil
-		} else {
-			return DeepLXTranslationResult{
-				Code:         http.StatusOK,
-				ID:           id,
-				Message:      "Success",
-				Data:         res.Get("result.texts.0.text").String(),
-				Alternatives: alternatives,
-				SourceLang:   sourceLang,
-				TargetLang:   targetLang,
-				Method:       "Pro",
-			}, nil
-		}
-	}
+	return DeepLXTranslationResult{
+		Code:         http.StatusOK,
+		ID:           id,
+		Data:         translatedText,
+		Alternatives: alternatives,
+		SourceLang:   sourceLang,
+		TargetLang:   targetLang,
+		Method:       map[bool]string{true: "Pro", false: "Free"}[dlSession != ""],
+	}, nil
 }
