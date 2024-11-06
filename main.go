@@ -1,8 +1,8 @@
 /*
  * @Author: Vincent Yang
  * @Date: 2023-07-01 21:45:34
- * @LastEditors: Vincent Yang
- * @LastEditTime: 2024-11-01 13:04:50
+ * @LastEditors: Vincent Young
+ * @LastEditTime: 2024-09-16 12:12:35
  * @FilePath: /DeepLX/main.go
  * @Telegram: https://t.me/missuo
  * @GitHub: https://github.com/missuo
@@ -131,7 +131,7 @@ func main() {
 			return
 		}
 
-		result, err := translate.TranslateByDeepLX(sourceLang, targetLang, translateText, tagHandling, proxyURL, "")
+		result, err := translate.TranslateByDeepLX(sourceLang, targetLang, translateText, tagHandling, proxyURL)
 		if err != nil {
 			log.Fatalf("Translation failed: %s", err)
 		}
@@ -168,6 +168,8 @@ func main() {
 
 		dlSession := cfg.DlSession
 
+		// fmt.Printf("ENV DL_SESSION: %s\n", cfg.DlSession)
+
 		if tagHandling != "" && tagHandling != "html" && tagHandling != "xml" {
 			c.JSON(http.StatusBadRequest, gin.H{
 				"code":    http.StatusBadRequest,
@@ -185,10 +187,12 @@ func main() {
 			}
 		}
 
+		// log.Printf("dlSession: %s\n", dlSession)
+
 		if dlSession == "" {
 			c.JSON(http.StatusUnauthorized, gin.H{
 				"code":    http.StatusUnauthorized,
-				"message": "No dl_session Found",
+				"message": "No dl_session Found.",
 			})
 			return
 		} else if strings.Contains(dlSession, ".") {
@@ -199,7 +203,7 @@ func main() {
 			return
 		}
 
-		result, err := translate.TranslateByDeepLX(sourceLang, targetLang, translateText, tagHandling, proxyURL, dlSession)
+		result, err := translate.TranslateByDeepLXPro(sourceLang, targetLang, translateText, tagHandling, dlSession, proxyURL)
 		if err != nil {
 			log.Fatalf("Translation failed: %s", err)
 		}
@@ -258,7 +262,7 @@ func main() {
 			return
 		}
 
-		result, err := translate.TranslateByDeepLX(sourceLang, targetLang, translateText, tagHandling, proxyURL, dlSession)
+		result, err := translate.TranslateByDeepLXPro(sourceLang, targetLang, translateText, tagHandling, dlSession, proxyURL)
 		if err != nil {
 			log.Fatalf("Translation failed: %s", err)
 		}
@@ -310,7 +314,7 @@ func main() {
 			targetLang = jsonData.TargetLang
 		}
 
-		result, err := translate.TranslateByDeepLX("", targetLang, translateText, "", proxyURL, "")
+		result, err := translate.TranslateByDeepLX("", targetLang, translateText, "", proxyURL)
 		if err != nil {
 			log.Fatalf("Translation failed: %s", err)
 		}
