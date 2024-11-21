@@ -25,7 +25,9 @@ deeplx pro2api：
 ip接口（国内用户推荐使用）
 
 >http://117.72.83.180:11888/translate
+>
 >http://117.72.83.180:11888/v1/translate
+>
 >http://117.72.83.180:11888/d45074b4-5bb0-4756-9105-e05082b05c57/v1/translate
 
 如果发现dl_session不可用，直接用第三个url替换dl_session即可。
