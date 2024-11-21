@@ -1,6 +1,7 @@
 MIT License
 
 Copyright (c) 2022 OwO Network Limited
+Copyright (c) 2024 luzov
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -19,3 +20,7 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+## 修改说明
+- 添加了 Pro2API 通过 url 传入 dl_session 的功能
+- 修复了 传入 cookie 导致 dl_session 读取错误的问题
