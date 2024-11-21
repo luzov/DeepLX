@@ -21,10 +21,6 @@ deeplx pro2api：
 >http(s)://<your_domian>/<dl_session>/v1/translate
 
 这里提供下我自己搭的服务，同时支持原项目支持的 /translate free2api 和 /v1/translate pro2api 接口，已配置dl_session，可直接调用。
-域名接口
->https://deeplx-api.itisu.me/translate
->https://deeplx-api.itisu.me/v1/translate
->https://deeplx-api.itisu.me/d45074b4-5bb0-4756-9105-e05082b05c57/v1/translate
 
 ip接口（国内用户推荐使用）
 
